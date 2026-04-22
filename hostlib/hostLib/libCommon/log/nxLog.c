@@ -112,12 +112,12 @@ static SemaphoreHandle_t gLogginglock;
 /* Only for base session with os */
 static pthread_mutex_t gLogginglock;
 #endif
-static void nLog_AcquireLock();
-static void nLog_ReleaseLock();
+static void nLog_AcquireLock(void);
+static void nLog_ReleaseLock(void);
 #if USE_LOCK
 static uint8_t lockInitialised = false;
 #endif
-static void nLog_AcquireLock()
+static void nLog_AcquireLock(void)
 {
 #if USE_LOCK
     if (lockInitialised) {
@@ -134,7 +134,7 @@ static void nLog_AcquireLock()
 #endif
 }
 
-static void nLog_ReleaseLock()
+static void nLog_ReleaseLock(void)
 {
 #if USE_LOCK
     if (lockInitialised) {
@@ -386,7 +386,7 @@ static void ansi_setColor(int level)
 #endif // USE_COLORED_LOGS
 }
 
-static void ansi_reSetColor()
+static void ansi_reSetColor(void)
 {
 #if USE_COLORED_LOGS
 #if !AX_EMBEDDED

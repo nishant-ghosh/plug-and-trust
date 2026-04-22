@@ -33,6 +33,7 @@
 #include "sm_apdu.h"
 #include "sm_errors.h"
 #include "sm_types.h"
+#include <limits.h>
 
 #include "nxLog_smCom.h"
 #include "nxEnsure.h"
@@ -257,7 +258,9 @@ U16 SM_RjctConnectVCOM(void **conn_ctx, const char *connectString, SmCommState_t
     else {
         *atrLen = 0;
     }
-
+    if (status > UINT16_MAX) {
+        return ERR_API_ERROR;
+    }
     return (U16)status;
 }
 #endif // RJCT_VCOM
@@ -282,7 +285,9 @@ U16 SM_RjctConnectNxpNfcRdLib(void **conn_ctx, const char *connectString, SmComm
     if (status == SMCOM_OK) {
         *atrLen = 0;
     }
-
+    if (status > UINT16_MAX) {
+        return ERR_API_ERROR;
+    }
     return (U16)status;
 }
 #endif

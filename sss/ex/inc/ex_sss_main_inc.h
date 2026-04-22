@@ -117,6 +117,10 @@ int main(int argc, const char *argv[])
         memset(PCONTEXT, 0, sizeof(*PCONTEXT));
 #if EX_SSS_BOOT_EXPOSE_ARGC_ARGV
         /* so that tool can fetchup last value */
+        if ((INT_MAX - 1) < gex_sss_argc) {
+            status = kStatus_SSS_Fail;
+            goto cleanup;
+        }
         gex_sss_argc++;
 #endif // EX_SSS_BOOT_EXPOSE_ARGC_ARGV
         goto before_ex_sss_entry;
@@ -147,7 +151,11 @@ int main(int argc, const char *argv[])
     }
 
 #if EX_SSS_BOOT_OPEN_HOST_SESSION && SSS_HAVE_HOSTCRYPTO_ANY
-    ex_sss_boot_open_host_session((PCONTEXT));
+    status = ex_sss_boot_open_host_session((PCONTEXT));
+    if(kStatus_SSS_Success != status) {
+        LOG_E("ex_sss_boot_open_host_session Failed");
+        goto cleanup;
+    }
 #endif
 
 before_ex_sss_entry:

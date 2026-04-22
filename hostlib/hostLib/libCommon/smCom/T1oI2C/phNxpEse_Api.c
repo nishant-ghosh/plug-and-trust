@@ -585,7 +585,6 @@ static int phNxpEse_readPacket(void* conn_ctx, void *pDevHandle, uint8_t * pBuff
     {
         sof_counter++;
         ret = -1;
-        sm_sleep(ESE_POLL_DELAY_MS); /* 1ms delay to give ESE polling delay */
         ret = phPalEse_i2c_read(pDevHandle, pBuffer, 2); /*read NAD PCB byte first*/
         if (ret < 0)
         {
@@ -651,16 +650,13 @@ static int phNxpEse_readPacket(void* conn_ctx, void *pDevHandle, uint8_t * pBuff
             }
             break;
         }
-        /*If it is Chained packet wait for 1 ms*/
         if(poll_sof_chained_delay == 1)
         {
             LOG_D("%s Chained Pkt, delay read %dms",__FUNCTION__,ESE_POLL_DELAY_MS * CHAINED_PKT_SCALER);
-            sm_sleep(ESE_POLL_DELAY_MS);
         }
         else
         {
             LOG_D("%s Normal Pkt, delay read %dms",__FUNCTION__,ESE_POLL_DELAY_MS * NAD_POLLING_SCALER);
-            sm_sleep(ESE_POLL_DELAY_MS);
         }
     } while ((sof_counter < ESE_NAD_POLLING_MAX) && (nxpese_ctxt->EseLibStatus!= ESE_STATUS_CLOSE));
     if((pBuffer[0] == RECIEVE_PACKET_SOF) && (ret > 0))

@@ -158,7 +158,9 @@ sss_status_t sss_mbedtls_session_open(sss_mbedtls_session_t *session,
     retval = kStatus_SSS_InvalidArgument;
 
     mbedtls_ctr_drbg_init((session->ctr_drbg));
+#if defined(MBEDTLS_ENTROPY_C)
     mbedtls_entropy_init((session->entropy));
+#endif
     retval = sss_mbedtls_drbg_seed(session, pers, sizeof(pers) - 1);
     if (retval != kStatus_SSS_Success) {
         LOG_E("MbedTLS:DRBG Failed");
@@ -1266,15 +1268,22 @@ static mbedtls_md_type_t sss_mbedtls_set_padding_get_hash(sss_algorithm_t algori
 #if defined(MBEDTLS_RSA_C)
     if (algorithm >= kAlgorithm_SSS_RSASSA_PKCS1_PSS_MGF1_SHA1 &&
         algorithm <= kAlgorithm_SSS_RSASSA_PKCS1_PSS_MGF1_SHA512) {
-        mbedtls_rsa_set_padding(mbedtls_pk_rsa(*pKey), MBEDTLS_RSA_PKCS_V21, md_alg);
+        #if SSSFTR_SW_RSA
+            mbedtls_rsa_set_padding(mbedtls_pk_rsa(*pKey), MBEDTLS_RSA_PKCS_V21, md_alg);
+        #else
+            md_alg = MBEDTLS_MD_NONE;
+        #endif
     }
     else if ((algorithm >= kAlgorithm_SSS_RSASSA_PKCS1_V1_5_SHA1 &&
                  algorithm <= kAlgorithm_SSS_RSASSA_PKCS1_V1_5_SHA512) ||
              algorithm == kAlgorithm_SSS_RSASSA_PKCS1_V1_5_NO_HASH) {
-        mbedtls_rsa_set_padding(mbedtls_pk_rsa(*pKey), MBEDTLS_RSA_PKCS_V15, md_alg);
+        #if SSSFTR_SW_RSA
+            mbedtls_rsa_set_padding(mbedtls_pk_rsa(*pKey), MBEDTLS_RSA_PKCS_V15, md_alg);
+        #else
+            md_alg = MBEDTLS_MD_NONE;
+        #endif
     }
 #endif
-
     return md_alg;
 }
 #endif
@@ -1697,7 +1706,7 @@ sss_status_t sss_mbedtls_cipher_init(sss_mbedtls_symmetric_t *context, uint8_t *
             }
             if (mbedtls_cipher_setkey(context->cipher_ctx,
                     context->keyObject->contents,
-                    context->keyObject->contents_size * 8,
+                    (int)context->keyObject->contents_size * 8,
                     MBEDTLS_ENCRYPT) != 0) {
                 retval = kStatus_SSS_InvalidArgument;
             }
@@ -1709,7 +1718,7 @@ sss_status_t sss_mbedtls_cipher_init(sss_mbedtls_symmetric_t *context, uint8_t *
             }
             if (mbedtls_cipher_setkey(context->cipher_ctx,
                     context->keyObject->contents,
-                    context->keyObject->contents_size * 8,
+                    (int)context->keyObject->contents_size * 8,
                     MBEDTLS_DECRYPT) != 0) {
                 retval = kStatus_SSS_InvalidArgument;
             }
@@ -3178,7 +3187,9 @@ sss_status_t sss_mbedtls_rng_context_init(sss_mbedtls_rng_context_t *context, ss
     if (session->entropy == NULL) {
         session->entropy = SSS_CALLOC(1, sizeof(*session->entropy));
         ENSURE_OR_GO_EXIT(session->entropy != NULL);
+#if defined(MBEDTLS_ENTROPY_C)
         mbedtls_entropy_init((session->entropy));
+#endif
     }
 
     retval = kStatus_SSS_Success;
@@ -3634,7 +3645,7 @@ static sss_status_t sss_mbedtls_generate_ecp_key(
         groupId = get_mont_group_id(keyBitLen);
     }
     else {
-        LOG_E(" sss_openssl_generate_ecp_key: Invalid key type ");
+        LOG_E(" sss_mbedtls_generate_ecp_key: Invalid key type ");
     }
 
     if (groupId != MBEDTLS_ECP_DP_NONE) {

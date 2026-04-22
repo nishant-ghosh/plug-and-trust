@@ -34,13 +34,15 @@
 /* ************************************************************************** */
 
 static sss_status_t nxECKey_InternalAuthenticate(pSe05xSession_t se05xSession,
-    SE05x_AuthCtx_ECKey_t *pAuthFScp,
-    uint8_t *hostEckaPubKey,
-    size_t hostEckaPubKeyLen,
-    uint8_t *rndData,
-    size_t *rndDataLen,
-    uint8_t *receipt,
-    size_t *receiptLen);
+   SE05x_AuthCtx_ECKey_t *pAuthFScp,
+   uint8_t *hostEckaPubKey,
+   size_t hostEckaPubKeyLen,
+   uint8_t *rndData,
+   size_t *rndDataLen,
+   uint8_t *receipt,
+   size_t *receiptLen,
+   uint8_t *cmdbuf_out,
+   size_t *cmdbufLen_out);
 
 static sss_status_t nxECKey_calculate_master_secret(
     SE05x_AuthCtx_ECKey_t *pAuthFScp, uint8_t *rnd, size_t rndLen, uint8_t *sharedSecret, size_t sharedSecretLen);
@@ -51,6 +53,9 @@ static sss_status_t nxECKey_Calculate_Initial_Mac_Chaining_Value(SE05x_AuthCtx_E
 
 static sss_status_t nxECKey_Calculate_Shared_secret(
     SE05x_AuthCtx_ECKey_t *pAuthFScp, uint8_t *sharedSecret, size_t *sharedSecretLen);
+
+static sss_status_t nxECKey_VerifyReceipt(SE05x_AuthCtx_ECKey_t *pAuthFScp,
+    const uint8_t *cmdInput, size_t cmdInputLen, uint8_t *receipt, size_t receiptLen);
 
 #define TAG_PK_SE_ECKA 0x7F49
 #define TAG_SIG_SE_ECKA 0x5F37
@@ -123,8 +128,11 @@ sss_status_t nxECKey_AuthenticateChannel(
         pStatic_ctx->SeEcPubKey.keyStore, &pStatic_ctx->SeEcPubKey, pkSeEcka, *pSePubkeyLen, 256, NULL, 0);
     ENSURE_OR_GO_EXIT(status == kStatus_SSS_Success);
 
+    uint8_t cmdbuf[256];
+    size_t cmdbufLen = sizeof(cmdbuf);
+
     status = nxECKey_InternalAuthenticate(
-        se05xSession, pAuthFScp, hostEckaPub, hostEckaPubLen, drSE, &drSELen, receipt, &receiptLen);
+        se05xSession, pAuthFScp, hostEckaPub, hostEckaPubLen, drSE, &drSELen, receipt, &receiptLen, cmdbuf, &cmdbufLen);
     ENSURE_OR_GO_EXIT(status == kStatus_SSS_Success);
 
     /*Calculate the Shared Secret */
@@ -141,6 +149,10 @@ sss_status_t nxECKey_AuthenticateChannel(
 
     status = nxECKey_HostLocal_CalculateSessionKeys(pAuthFScp);
     ENSURE_OR_GO_EXIT(status == kStatus_SSS_Success);
+
+    status = nxECKey_VerifyReceipt(pAuthFScp, cmdbuf, cmdbufLen, receipt, receiptLen);
+    ENSURE_OR_GO_EXIT(status == kStatus_SSS_Success);
+
     /* Increment the command Encreption counter to 1*/
     memcpy(pDyn_ctx->cCounter, commandCounter, AES_KEY_LEN_nBYTE);
 
@@ -171,6 +183,32 @@ static sss_status_t nxECKey_Calculate_Initial_Mac_Chaining_Value(SE05x_AuthCtx_E
     LOG_MAU8_D("Initial MCV", iniMacChaining, AES_KEY_LEN_nBYTE);
     // Set the Initial MCV value
     memcpy(pDyn_ctx->MCV, iniMacChaining, AES_KEY_LEN_nBYTE);
+exit:
+    return status;
+}
+
+static sss_status_t nxECKey_VerifyReceipt(SE05x_AuthCtx_ECKey_t *pAuthFScp,
+    const uint8_t *cmdInput,
+    size_t cmdInputLen,
+    uint8_t *receipt,
+    size_t receiptLen)
+{
+    sss_status_t status                = kStatus_SSS_Fail;
+    NXECKey03_StaticCtx_t *pStatic_ctx = pAuthFScp->pStatic_ctx;
+    NXSCP03_DynCtx_t *pDyn_ctx         = pAuthFScp->pDyn_ctx;
+    sss_mac_t macCtx;
+
+    /*Receipt verification*/
+    status = sss_host_mac_context_init(&macCtx,
+        pStatic_ctx->masterSec.keyStore->session,
+        &pDyn_ctx->Rmac,
+        kAlgorithm_SSS_CMAC_AES,
+        kMode_SSS_Mac_Validate);
+    ENSURE_OR_GO_EXIT(status == kStatus_SSS_Success);
+    status = sss_host_mac_one_go(&macCtx, cmdInput, cmdInputLen, receipt, &receiptLen);
+    sss_host_mac_context_free(&macCtx);
+    ENSURE_OR_GO_EXIT(status == kStatus_SSS_Success);
+    status = kStatus_SSS_Success;
 exit:
     return status;
 }
@@ -306,13 +344,15 @@ static void set_secp256r1nist_header(uint8_t *pbKey, size_t *pbKeyByteLen)
 }
 
 sss_status_t nxECKey_InternalAuthenticate(pSe05xSession_t se05xSession,
-    SE05x_AuthCtx_ECKey_t *pAuthFScp,
-    uint8_t *hostEckaPubKey,
-    size_t hostEckaPubKeyLen,
-    uint8_t *rndData,
-    size_t *rndDataLen,
-    uint8_t *receipt,
-    size_t *receiptLen)
+   SE05x_AuthCtx_ECKey_t *pAuthFScp,
+   uint8_t *hostEckaPubKey,
+   size_t hostEckaPubKeyLen,
+   uint8_t *rndData,
+   size_t *rndDataLen,
+   uint8_t *receipt,
+   size_t *receiptLen,
+   uint8_t *cmdbuf_out,
+   size_t *cmdbufLen_out)
 {
     sss_status_t status  = kStatus_SSS_Fail;
     smStatus_t retStatus = SM_NOT_OK;
@@ -371,6 +411,9 @@ sss_status_t nxECKey_InternalAuthenticate(pSe05xSession_t se05xSession,
         goto cleanup;
     }
     cmdbufLen += hostEckaPubKeyLen;
+
+    memcpy(cmdbuf_out, cmdbuf, cmdbufLen);
+    *cmdbufLen_out = cmdbufLen;
 
     /* Get the sha256 hash of Control_refernce_template + host ECKA Pub key */
     status = sss_host_digest_context_init(

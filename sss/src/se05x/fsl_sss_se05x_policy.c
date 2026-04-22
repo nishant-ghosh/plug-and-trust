@@ -429,6 +429,11 @@ static void sss_se05x_update_ext_internal_sign_tbsId_value_policy(
 {
     /* copy 4 bytes tbsItemList_KeyId */
     sss_se05x_copy_uint32_to_u8_array(tbs_item.tbsItemList_KeyId, pbuffer + *ext_offset);
+
+    if (*ext_offset > UINT32_MAX - sizeof(tbs_item.tbsItemList_KeyId)) {
+        return;
+    }
+
     *ext_offset += sizeof(tbs_item.tbsItemList_KeyId);
 }
 #endif

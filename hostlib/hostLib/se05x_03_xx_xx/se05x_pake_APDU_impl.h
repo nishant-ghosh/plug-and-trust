@@ -158,11 +158,11 @@ smStatus_t Se05x_API_PAKEComputeKeyShare(pSe05xSession_t session_ctx,
 {
     smStatus_t retStatus = SM_NOT_OK;
     tlvHeader_t hdr      = {{kSE05x_CLA, kSE05x_INS_CRYPTO, kSE05x_P1_PAKE, kSE05x_P2_UPDATE}};
-    uint8_t cmdbuf[SE05X_MAX_BUF_SIZE_CMD];
+    uint8_t cmdbuf[SE05X_MAX_BUF_SIZE_CMD] = {0};
     size_t cmdbufLen = 0;
     uint8_t *pCmdbuf = &cmdbuf[0];
     int tlvRet       = 0;
-    uint8_t rspbuf[SE05X_MAX_BUF_SIZE_RSP];
+    uint8_t rspbuf[SE05X_MAX_BUF_SIZE_RSP] = {0};
     uint8_t *pRspbuf = &rspbuf[0];
     size_t rspbufLen = ARRAY_SIZE(rspbuf);
 #if VERBOSE_APDU_LOGS
@@ -207,11 +207,11 @@ smStatus_t Se05x_API_PAKEComputeSessionKeys(pSe05xSession_t session_ctx,
 {
     smStatus_t retStatus = SM_NOT_OK;
     tlvHeader_t hdr      = {{kSE05x_CLA, kSE05x_INS_CRYPTO, kSE05x_P1_PAKE, kSE05x_P2_GENERATE}};
-    uint8_t cmdbuf[SE05X_MAX_BUF_SIZE_CMD];
+    uint8_t cmdbuf[SE05X_MAX_BUF_SIZE_CMD] = {0};
     size_t cmdbufLen = 0;
     uint8_t *pCmdbuf = &cmdbuf[0];
     int tlvRet       = 0;
-    uint8_t rspbuf[SE05X_MAX_BUF_SIZE_RSP];
+    uint8_t rspbuf[SE05X_MAX_BUF_SIZE_RSP] = {0};
     uint8_t *pRspbuf = &rspbuf[0];
     size_t rspbufLen = ARRAY_SIZE(rspbuf);
 #if VERBOSE_APDU_LOGS
@@ -260,11 +260,11 @@ smStatus_t Se05x_API_PAKEVerifySessionKeys(pSe05xSession_t session_ctx,
 {
     smStatus_t retStatus = SM_NOT_OK;
     tlvHeader_t hdr      = {{kSE05x_CLA, kSE05x_INS_CRYPTO, kSE05x_P1_PAKE, kSE05x_P2_VERIFY}};
-    uint8_t cmdbuf[SE05X_MAX_BUF_SIZE_CMD];
+    uint8_t cmdbuf[SE05X_MAX_BUF_SIZE_CMD] = {0};
     size_t cmdbufLen = 0;
     uint8_t *pCmdbuf = &cmdbuf[0];
     int tlvRet       = 0;
-    uint8_t rspbuf[SE05X_MAX_BUF_SIZE_RSP];
+    uint8_t rspbuf[SE05X_MAX_BUF_SIZE_RSP] = {0};
     uint8_t *pRspbuf = &rspbuf[0];
     size_t rspbufLen = ARRAY_SIZE(rspbuf);
 #if VERBOSE_APDU_LOGS
@@ -305,11 +305,11 @@ smStatus_t Se05x_API_PAKEReadDeviceType(
 {
     smStatus_t retStatus = SM_NOT_OK;
     tlvHeader_t hdr      = {{kSE05x_CLA, kSE05x_INS_READ, kSE05x_P1_PAKE, kSE05x_P2_DEFAULT}};
-    uint8_t cmdbuf[SE05X_MAX_BUF_SIZE_CMD];
+    uint8_t cmdbuf[SE05X_MAX_BUF_SIZE_CMD] = {0};
     size_t cmdbufLen = 0;
     uint8_t *pCmdbuf = &cmdbuf[0];
     int tlvRet       = 0;
-    uint8_t rspbuf[SE05X_MAX_BUF_SIZE_RSP];
+    uint8_t rspbuf[SE05X_MAX_BUF_SIZE_RSP] = {0};
     uint8_t *pRspbuf = &rspbuf[0];
     size_t rspbufLen = ARRAY_SIZE(rspbuf);
     uint8_t devType  = 0;
@@ -348,11 +348,11 @@ smStatus_t Se05x_API_PAKEReadState(
 {
     smStatus_t retStatus = SM_NOT_OK;
     tlvHeader_t hdr      = {{kSE05x_CLA, kSE05x_INS_READ, kSE05x_P1_PAKE, kSE05x_P2_READ_STATE}};
-    uint8_t cmdbuf[SE05X_MAX_BUF_SIZE_CMD];
+    uint8_t cmdbuf[SE05X_MAX_BUF_SIZE_CMD] = {0};
     size_t cmdbufLen = 0;
     uint8_t *pCmdbuf = &cmdbuf[0];
     int tlvRet       = 0;
-    uint8_t rspbuf[SE05X_MAX_BUF_SIZE_RSP];
+    uint8_t rspbuf[SE05X_MAX_BUF_SIZE_RSP] = {0};
     uint8_t *pRspbuf = &rspbuf[0];
     size_t rspbufLen = ARRAY_SIZE(rspbuf);
     uint8_t devState = 0;

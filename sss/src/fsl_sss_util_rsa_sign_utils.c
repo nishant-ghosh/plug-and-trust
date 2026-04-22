@@ -564,7 +564,7 @@ smStatus_t emsa_decode_and_compare(
 
     memset(zeros, 0, 8);
 
-    msb = (sig_len * 8) - 1;
+    msb = (uint32_t)(sig_len * 8) - 1;
     /* Check if Most Significant bit is SET/UNSET */
     if (buf[0] >> (8 - 1)) {
         goto exit;

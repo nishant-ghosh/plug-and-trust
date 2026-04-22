@@ -113,16 +113,6 @@ i2c_error_t axI2CInit(void **conn_ctx, const char *pDevName);
  */
 void axI2CTerm(void* conn_ctx, int mode);
 
-#if AX_EMBEDDED
-/** Smarter handling of back off logic
- *
- *  When we get a NAK from SE, we back off and keep on increasing the delay for next I2C Read/Write.
- *
- *  When we get an ACK from SE, we reset this back off delay.
- */
-void axI2CResetBackoffDelay( void );
-#endif /* FREEDOM */
-
 #if defined(SCI2C) /* Means SCI2C SCIIC */
 /** Write a byte.
  *

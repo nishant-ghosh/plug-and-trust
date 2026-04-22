@@ -28,7 +28,7 @@
 // LCOV_EXCL_START
 /* initializes the system tick counter
  * return 0 on succes, 1 on failure */
-uint32_t sm_initSleep()
+uint32_t sm_initSleep(void)
 {
     return 0;
 }

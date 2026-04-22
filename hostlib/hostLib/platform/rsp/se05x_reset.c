@@ -16,7 +16,7 @@
 #define SE05X_EN_PIN 22
 #endif
 
-void axReset_HostConfigure()
+void axReset_HostConfigure(void)
 {
     int fd;
     char buf[50];
@@ -65,7 +65,7 @@ exit:
     return;
 }
 
-void axReset_HostUnconfigure()
+void axReset_HostUnconfigure(void)
 {
     int fd;
     char buf[50];

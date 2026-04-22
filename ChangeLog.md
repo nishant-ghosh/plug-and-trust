@@ -1,5 +1,16 @@
 # Plug-And-Trust Mini Package Change Log
 
+## Release v04.08.00
+
+- T=1oI2C Layer: Back off delay logic moved to T=1oI2C layer `hostLib/libCommon/smCom/T1oI2C/phNxpEsePal_i2c.c`. Removed platform-specific back off delay implementations from all platform folders.
+
+- Updated Se05x_T4T_API_UpdateBinary to handle data larger than 256 bytes. (:file:`hostLib/se05x_03_xx_xx/se05x_T4T_APDU_impl.h`)
+
+- ECKey Authentication: Added receipt verification for ECKey Authentication. (:file:`src/se05x/fsl_sss_se05x_eckey.c`)
+
+- Static Analysis: Addressed findings from static analysis tools.
+
+
 ## Release v04.07.01
 
 - New API (:cpp:func:`SM_AmResetI2C`) added in smcom layer (:file:`hostLib/libCommon/infra/sm_api.h`) to send reset request for access manager.

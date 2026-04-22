@@ -10,7 +10,12 @@
 /* Includes                                                                   */
 /* ************************************************************************** */
 
-#include <fsl_sss_ftr.h>
+#if defined(SSS_USE_FTR_FILE)
+#include "fsl_sss_ftr.h"
+#else
+#include "fsl_sss_ftr_default.h"
+#endif
+
 #include <fsl_sss_keyid_map.h>
 #include <inttypes.h>
 #include <nxLog_App.h>

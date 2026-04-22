@@ -265,6 +265,10 @@ sss_status_t ex_sss_boot_open_host_session(ex_sss_boot_ctx_t *pCtx)
             return status;
         }
     }
+    else {
+        /* Host session is already opened. */
+        status = kStatus_SSS_Success;
+    }
 #endif
     return status;
 }

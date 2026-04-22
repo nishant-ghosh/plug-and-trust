@@ -220,7 +220,7 @@ void smCom_DeInit(void)
 /**
  * Exchanges APDU without interpreting the message exchanged
  *
- * @param[in,out] pApdu        apdu_t datastructure
+ * @param[in,out] pApdu        apdu_t data structure
  *
  * @retval ::SMCOM_OK          Operation successful
  * @retval ::SMCOM_SND_FAILED  Send Failed

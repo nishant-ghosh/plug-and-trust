@@ -441,7 +441,7 @@ sss_status_t sss_openssl_key_object_get_purpose(sss_openssl_object_t *keyObject,
     if (purpose == NULL) {
         return kStatus_SSS_Fail;
     }
-    *purpose            = keyObject->purpose;
+    *purpose = keyObject->purpose;
     return retval;
 }
 
@@ -452,7 +452,7 @@ sss_status_t sss_openssl_key_object_get_access(sss_openssl_object_t *keyObject, 
     if (access == NULL) {
         return kStatus_SSS_Fail;
     }
-    *access             = keyObject->accessRights;
+    *access = keyObject->accessRights;
     return retval;
 }
 // LCOV_EXCL_STOP
@@ -640,9 +640,9 @@ sss_status_t sss_openssl_derive_key_go(sss_openssl_derive_key_t *context,
 
     if (saltLen == 0) {
         /* Copy key as is */
-        if (HKDF_PRK_MAX >= secretLen) {
+        if ((HKDF_PRK_MAX >= secretLen) && (secretLen <= UINT_MAX)) {
             memcpy(prk, secret, secretLen);
-            prk_len = secretLen;
+            prk_len = (unsigned int)secretLen;
         }
         else {
             LOG_E("HKDF Expand only (OpenSSL implementation): buffer too small");
@@ -998,7 +998,7 @@ sss_status_t sss_openssl_key_store_generate_key(
 
     ENSURE_OR_GO_EXIT(keyStore);
     ENSURE_OR_GO_EXIT(keyObject);
-    cipher_type = (sss_cipher_type_t) keyObject->cipherType;
+    cipher_type = (sss_cipher_type_t)keyObject->cipherType;
 
     AX_UNUSED_ARG(options);
 
@@ -2379,7 +2379,7 @@ sss_status_t sss_openssl_cipher_finish(
         blockoutLen = outBuffSize;
         ENSURE_OR_GO_EXIT(blockoutLen >= cipherBlockSize);
         if (1 !=
-            EVP_CipherUpdate(context->cipher_ctx, destData, (int *)&blockoutLen, srcdata_updated, cipherBlockSize)) {
+            EVP_CipherUpdate(context->cipher_ctx, destData, (int *)&blockoutLen, srcdata_updated, (int)cipherBlockSize)) {
             goto exit;
         }
         *destLen = blockoutLen;
@@ -2394,7 +2394,7 @@ sss_status_t sss_openssl_cipher_finish(
                      destData + cipherBlockSize,
                      (int *)&blockoutLen,
                      srcdata_updated + cipherBlockSize,
-                     cipherBlockSize)) {
+                     (int)cipherBlockSize)) {
             goto exit;
         }
         *destLen += blockoutLen;
@@ -2471,7 +2471,7 @@ sss_status_t sss_openssl_cipher_crypt_ctr(sss_openssl_symmetric_t *context,
         retval = kStatus_SSS_Fail;
         goto exit;
     }
-    if (!EVP_CipherUpdate(ctx, destData, (int *)&destLen, srcData, srcLen)) {
+    if (!EVP_CipherUpdate(ctx, destData, (int *)&destLen, srcData, (int)srcLen)) {
         retval = kStatus_SSS_Fail;
         goto exit;
     }
@@ -2563,9 +2563,9 @@ sss_status_t sss_openssl_aead_context_init(sss_openssl_aead_t *context,
     sss_status_t retval = kStatus_SSS_Fail;
 
     ENSURE_OR_GO_EXIT(context != NULL);
-    context->session    = session;
-    context->keyObject  = keyObject;
-    context->mode       = mode;
+    context->session   = session;
+    context->keyObject = keyObject;
+    context->mode      = mode;
 
     ENSURE_OR_GO_EXIT(context != NULL);
     ENSURE_OR_GO_EXIT(session != NULL);
@@ -2674,7 +2674,7 @@ sss_status_t sss_openssl_aead_one_go(sss_openssl_aead_t *context,
 
     /* Set IV length if default 96 bits is not appropriate */
     ENSURE_OR_GO_EXIT(context->aead_ctx != NULL);
-    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_GCM_SET_IVLEN, nonceLen, NULL);
+    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_GCM_SET_IVLEN, (int)nonceLen, NULL);
     ENSURE_OR_GO_EXIT(ret == 1);
     context->pCcm_data = NULL;
 
@@ -2704,7 +2704,7 @@ sss_status_t sss_openssl_aead_init(
     }
 
     if (context->algorithm == kAlgorithm_SSS_AES_GCM) {
-        ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_GCM_SET_IVLEN, nonceLen, NULL);
+        ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_GCM_SET_IVLEN, (int)nonceLen, NULL);
         ENSURE_OR_GO_EXIT(ret == 1);
         context->cache_data_len = 0;
         memset(context->cache_data, 0x00, sizeof(context->cache_data));
@@ -2756,10 +2756,10 @@ sss_status_t sss_openssl_aead_update_aad(sss_openssl_aead_t *context, const uint
     /* Provide AAD data */
     if (context->algorithm == kAlgorithm_SSS_AES_GCM) {
         if (context->mode == kMode_SSS_Decrypt) {
-            ret = EVP_DecryptUpdate(context->aead_ctx, NULL, &len, aadData, aadDataLen);
+            ret = EVP_DecryptUpdate(context->aead_ctx, NULL, &len, aadData, (int)aadDataLen);
         }
         else {
-            ret = EVP_EncryptUpdate(context->aead_ctx, NULL, &len, aadData, aadDataLen);
+            ret = EVP_EncryptUpdate(context->aead_ctx, NULL, &len, aadData, (int)aadDataLen);
         }
         ENSURE_OR_GO_EXIT(ret == 1);
     }
@@ -2909,7 +2909,7 @@ static int aead_update(sss_openssl_aead_t *context,
             *destLen = 0;
             return 0;
         }
-        ret = EVP_EncryptUpdate(context->aead_ctx, destData, &len, srcData, srcLen);
+        ret = EVP_EncryptUpdate(context->aead_ctx, destData, &len, srcData, (int)srcLen);
     }
     else if (context->mode == kMode_SSS_Decrypt) {
         if (srcLen > INT_MAX) {
@@ -2918,7 +2918,7 @@ static int aead_update(sss_openssl_aead_t *context,
                 return 0;
             }
         }
-        ret = EVP_DecryptUpdate(context->aead_ctx, destData, &len, srcData, srcLen);
+        ret = EVP_DecryptUpdate(context->aead_ctx, destData, &len, srcData, (int)srcLen);
     }
     if (len < 0) {
         *destLen = 0;
@@ -2986,12 +2986,12 @@ sss_status_t sss_openssl_aead_finish(sss_openssl_aead_t *context,
             ENSURE_OR_GO_EXIT(len >= 0);
             (*destLen) += len;
             ENSURE_OR_GO_EXIT((*tagLen) <= INT_MAX);
-            ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_GCM_GET_TAG, *tagLen, tag);
+            ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_GCM_GET_TAG, (int)*tagLen, tag);
             // *tagLen  = EVP_CTRL_GCM_GET_TAG;
         }
         else if (context->mode == kMode_SSS_Decrypt) {
             ENSURE_OR_GO_EXIT((*tagLen) <= INT_MAX);
-            ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_GCM_SET_TAG, *tagLen, tag);
+            ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_GCM_SET_TAG, (int)*tagLen, tag);
             ENSURE_OR_GO_EXIT(ret == 1);
 
             ret = EVP_DecryptFinal_ex(context->aead_ctx, destData + (*destLen), &len);
@@ -3042,12 +3042,12 @@ static sss_status_t sss_openssl_aead_ccm_Encryptfinal(sss_openssl_aead_t *contex
 
     /*Set IV len */
     ENSURE_OR_GO_EXIT(context->ccm_ivLen <= INT_MAX);
-    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_CCM_SET_IVLEN, context->ccm_ivLen, NULL);
+    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_CCM_SET_IVLEN, (int)context->ccm_ivLen, NULL);
     ENSURE_OR_GO_EXIT(ret == 1)
 
     /* Set tag length */
     ENSURE_OR_GO_EXIT(context->ccm_tagLen <= INT_MAX);
-    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_CCM_SET_TAG, context->ccm_tagLen, NULL);
+    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_CCM_SET_TAG, (int)context->ccm_tagLen, NULL);
     ENSURE_OR_GO_EXIT(ret == 1)
 
     /* Initialise key and IV */
@@ -3055,25 +3055,26 @@ static sss_status_t sss_openssl_aead_ccm_Encryptfinal(sss_openssl_aead_t *contex
     ENSURE_OR_GO_EXIT(ret == 1);
     /* Provide the total plain length */
     ENSURE_OR_GO_EXIT(context->ccm_dataTotalLen <= INT_MAX);
-    ret = EVP_EncryptUpdate(context->aead_ctx, NULL, &len, NULL, context->ccm_dataTotalLen);
+    ret = EVP_EncryptUpdate(context->aead_ctx, NULL, &len, NULL, (int)context->ccm_dataTotalLen);
     ENSURE_OR_GO_EXIT(ret == 1);
 
     /* Provide any AAD data*/
     ENSURE_OR_GO_EXIT(context->ccm_aadLen <= INT_MAX);
+    /* Skip the EVP_EncryptUpdate call if there is no AAD */
     if ((NULL != context->pCcm_aad) && (context->ccm_aadLen > 0)) {
-    ret = EVP_EncryptUpdate(context->aead_ctx, NULL, &len, context->pCcm_aad, context->ccm_aadLen);
-    ENSURE_OR_GO_EXIT(ret == 1);
+        ret = EVP_EncryptUpdate(context->aead_ctx, NULL, &len, context->pCcm_aad, (int)context->ccm_aadLen);
+        ENSURE_OR_GO_EXIT(ret == 1);
     }
 
     /* Provide the message to be decrypted*/
     ENSURE_OR_GO_EXIT(context->ccm_dataTotalLen <= INT_MAX);
-    ret = EVP_EncryptUpdate(context->aead_ctx, destData, &len, context->pCcm_data, context->ccm_dataTotalLen);
+    ret = EVP_EncryptUpdate(context->aead_ctx, destData, &len, context->pCcm_data, (int)context->ccm_dataTotalLen);
     ENSURE_OR_GO_EXIT(ret == 1);
     ENSURE_OR_GO_EXIT(len >= 0);
     *destLen = len;
     len      = 0;
     ENSURE_OR_GO_EXIT(context->ccm_tagLen <= INT_MAX);
-    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_CCM_GET_TAG, context->ccm_tagLen, context->pCcm_tag);
+    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_CCM_GET_TAG, (int)context->ccm_tagLen, context->pCcm_tag);
 
     ENSURE_OR_GO_EXIT(ret == 1);
     //context->ccm_tagLen = len;
@@ -3094,15 +3095,15 @@ static sss_status_t sss_openssl_aead_ccm_Decryptfinal(sss_openssl_aead_t *contex
 
     ENSURE_OR_GO_EXIT(context != NULL);
     ENSURE_OR_GO_EXIT(context->ccm_dataTotalLen <= INT_MAX);
-    payloadlen = context->ccm_dataTotalLen;
+    payloadlen = (int)context->ccm_dataTotalLen;
 
     /*Set IV len */
     ENSURE_OR_GO_EXIT(context->ccm_ivLen <= INT_MAX);
-    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_CCM_SET_IVLEN, context->ccm_ivLen, NULL);
+    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_CCM_SET_IVLEN, (int)context->ccm_ivLen, NULL);
     ENSURE_OR_GO_EXIT(ret == 1)
     /* Set expected tag value. */
     ENSURE_OR_GO_EXIT(context->ccm_tagLen <= INT_MAX);
-    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_CCM_SET_TAG, context->ccm_tagLen, context->pCcm_tag);
+    ret = EVP_CIPHER_CTX_ctrl(context->aead_ctx, EVP_CTRL_CCM_SET_TAG, (int)context->ccm_tagLen, context->pCcm_tag);
     ENSURE_OR_GO_EXIT(ret == 1);
     /* Initialise key and IV */
     ret = EVP_DecryptInit_ex(context->aead_ctx, NULL, NULL, context->keyObject->contents, context->pCcm_iv);
@@ -3113,13 +3114,15 @@ static sss_status_t sss_openssl_aead_ccm_Decryptfinal(sss_openssl_aead_t *contex
 
     /* Provide any AAD data*/
     ENSURE_OR_GO_EXIT(context->ccm_aadLen <= INT_MAX);
+    /* Skip the EVP_EncryptUpdate call if there is no AAD */
     if ((NULL != context->pCcm_aad) && (context->ccm_aadLen > 0)) {
-    ret = EVP_DecryptUpdate(context->aead_ctx, NULL, &len, context->pCcm_aad, context->ccm_aadLen);
-    ENSURE_OR_GO_EXIT(ret == 1);
+        ret = EVP_DecryptUpdate(context->aead_ctx, NULL, &len, context->pCcm_aad, (int)context->ccm_aadLen);
+        ENSURE_OR_GO_EXIT(ret == 1);
     }
+
     /* Provide the message to be decrypted*/
     ENSURE_OR_GO_EXIT(context->ccm_dataTotalLen <= INT_MAX);
-    ret = EVP_DecryptUpdate(context->aead_ctx, destData, &len, context->pCcm_data, context->ccm_dataTotalLen);
+    ret = EVP_DecryptUpdate(context->aead_ctx, destData, &len, context->pCcm_data, (int)context->ccm_dataTotalLen);
     ENSURE_OR_GO_EXIT(ret == 1);
     ENSURE_OR_GO_EXIT(len >= 0);
     *destLen = len;
@@ -4826,7 +4829,7 @@ static sss_status_t sss_openssl_hkdf_expand(const EVP_MD *md,
         retval = kStatus_SSS_Fail;
         goto exit;
     }
-    if (EVP_PKEY_CTX_set1_hkdf_key(pctx, prk, prk_len) <= 0) {
+    if (EVP_PKEY_CTX_set1_hkdf_key(pctx, prk, (int)prk_len) <= 0) {
         retval = kStatus_SSS_Fail;
         goto exit;
     }
@@ -4834,7 +4837,7 @@ static sss_status_t sss_openssl_hkdf_expand(const EVP_MD *md,
         retval = kStatus_SSS_Fail;
         goto exit;
     }
-    if (EVP_PKEY_CTX_add1_hkdf_info(pctx, info, info_len) <= 0) {
+    if (EVP_PKEY_CTX_add1_hkdf_info(pctx, info, (int)info_len) <= 0) {
         retval = kStatus_SSS_Fail;
         goto exit;
     }
@@ -5039,13 +5042,13 @@ static sss_status_t sss_openssl_aead_one_go_encrypt(sss_openssl_aead_t *context,
     if (aad != NULL) {
         /* Add AAD data.*/
         ENSURE_OR_GO_EXIT(aadLen <= INT_MAX);
-        ret = EVP_EncryptUpdate(context->aead_ctx, NULL, &len, aad, aadLen);
+        ret = EVP_EncryptUpdate(context->aead_ctx, NULL, &len, aad, (int)aadLen);
         ENSURE_OR_GO_EXIT(ret == 1);
     }
     if (srcData != NULL) {
         /* Encrypt plaintext */
         ENSURE_OR_GO_EXIT(size <= INT_MAX);
-        ret = EVP_EncryptUpdate(context->aead_ctx, destData, &len, srcData, size);
+        ret = EVP_EncryptUpdate(context->aead_ctx, destData, &len, srcData, (int)size);
         ENSURE_OR_GO_EXIT(ret == 1);
 
         ENSURE_OR_GO_EXIT(len >= 0);
@@ -5091,14 +5094,14 @@ static sss_status_t sss_openssl_aead_one_go_decrypt(sss_openssl_aead_t *context,
     /* Specify any AAD */
     if (aad != NULL) {
         ENSURE_OR_GO_EXIT(aadLen <= INT_MAX);
-        ret = EVP_DecryptUpdate(context->aead_ctx, NULL, &len, aad, aadLen);
+        ret = EVP_DecryptUpdate(context->aead_ctx, NULL, &len, aad, (int)aadLen);
         ENSURE_OR_GO_EXIT(ret == 1);
     }
 
     /* Decrypt ciphertext */
     if (srcData != NULL) {
         ENSURE_OR_GO_EXIT(size <= INT_MAX);
-        ret = EVP_DecryptUpdate(context->aead_ctx, destData, &len, srcData, size);
+        ret = EVP_DecryptUpdate(context->aead_ctx, destData, &len, srcData, (int)size);
         ENSURE_OR_GO_EXIT(ret == 1);
     }
 

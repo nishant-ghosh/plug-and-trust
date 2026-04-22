@@ -485,7 +485,7 @@ static sss_status_t ex_sss_se05x_prepare_host_platformscp(
 #if defined(SECURE_WORLD)
     pAuthCtx->pStatic_ctx->key_len = AUTH_KEY_SIZE;
 #else
-    pAuthCtx->pStatic_ctx->key_len = enc_len;
+    pAuthCtx->pStatic_ctx->key_len = (int)enc_len;
 #endif
     pStatic_ctx = pAuthCtx->pStatic_ctx;
     pDyn_ctx    = pAuthCtx->pDyn_ctx;
