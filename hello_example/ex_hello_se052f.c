@@ -375,6 +375,147 @@ cleanup:
     return status;
 }
 
+static void init_attestation_data_lengths(sss_se05x_attst_data_t *attst_data)
+{
+    size_t i = 0;
+
+    for (i = 0; i < SE05X_MAX_ATTST_DATA; i++) {
+        attst_data->data[i].timeStampLen = sizeof(attst_data->data[i].timeStamp);
+        attst_data->data[i].chipIdLen    = sizeof(attst_data->data[i].chipId);
+        attst_data->data[i].attributeLen = sizeof(attst_data->data[i].attribute);
+        attst_data->data[i].signatureLen = sizeof(attst_data->data[i].signature);
+#if SSS_HAVE_SE05X_VER_GTE_07_02
+        attst_data->data[i].cmdLen     = sizeof(attst_data->data[i].cmd);
+        attst_data->data[i].objSizeLen = sizeof(attst_data->data[i].objSize);
+#else
+        attst_data->data[i].outrandomLen = sizeof(attst_data->data[i].outrandom);
+#endif
+    }
+}
+
+static sss_status_t read_key_object_with_attestation(
+    sss_session_t *session, uint32_t object_id, const char *label, uint8_t *freshness, size_t freshness_len)
+{
+    sss_status_t status              = kStatus_SSS_Fail;
+    sss_key_store_t key_store        = {0};
+    sss_object_t target_key          = {0};
+    sss_object_t attestation_key     = {0};
+    sss_se05x_attst_data_t attst_data = {0};
+    uint8_t object_data[256]         = {0};
+    size_t object_data_len           = sizeof(object_data);
+    size_t object_bit_len            = 0;
+    int key_store_initialized        = 0;
+    int target_key_initialized       = 0;
+    int attestation_key_initialized  = 0;
+
+    status = sss_key_store_context_init(&key_store, session);
+    if (status != kStatus_SSS_Success) {
+        LOG_W("%s: sss_key_store_context_init failed: 0x%04X", label, status);
+        goto cleanup;
+    }
+    key_store_initialized = 1;
+
+    status = sss_key_store_allocate(&key_store, __LINE__);
+    if (status != kStatus_SSS_Success) {
+        LOG_W("%s: sss_key_store_allocate failed: 0x%04X", label, status);
+        goto cleanup;
+    }
+
+    status = sss_key_object_init(&target_key, &key_store);
+    if (status != kStatus_SSS_Success) {
+        LOG_W("%s: target key object init failed: 0x%04X", label, status);
+        goto cleanup;
+    }
+    target_key_initialized = 1;
+
+    status = sss_key_object_get_handle(&target_key, object_id);
+    if (status != kStatus_SSS_Success) {
+        LOG_W("%s: target key 0x%08X handle lookup failed: 0x%04X", label, object_id, status);
+        goto cleanup;
+    }
+
+    status = sss_key_object_init(&attestation_key, &key_store);
+    if (status != kStatus_SSS_Success) {
+        LOG_W("%s: attestation key object init failed: 0x%04X", label, status);
+        goto cleanup;
+    }
+    attestation_key_initialized = 1;
+
+    status = sss_key_object_get_handle(&attestation_key, SE052F_ATTESTATION_KEY_ID);
+    if (status != kStatus_SSS_Success) {
+        LOG_W("%s: attestation key 0x%08X handle lookup failed: 0x%04X", label, SE052F_ATTESTATION_KEY_ID, status);
+        goto cleanup;
+    }
+
+    init_attestation_data_lengths(&attst_data);
+    status = sss_se05x_key_store_get_key_attst((sss_se05x_key_store_t *)&key_store,
+        (sss_se05x_object_t *)&target_key,
+        object_data,
+        &object_data_len,
+        &object_bit_len,
+        (sss_se05x_object_t *)&attestation_key,
+        kAlgorithm_SSS_SHA256,
+        freshness,
+        freshness_len,
+        &attst_data);
+    if (status != kStatus_SSS_Success) {
+        LOG_W("%s: read-with-attestation failed for object 0x%08X: 0x%04X", label, object_id, status);
+        goto cleanup;
+    }
+
+    printf("%s attested read object: 0x%08X\n", label, object_id);
+    printf("%s public object data:   ", label);
+    print_hex("", object_data, object_data_len);
+    if (attst_data.valid_number > 0) {
+        printf("%s attestation attr:   ", label);
+        print_hex("", attst_data.data[0].attribute, attst_data.data[0].attributeLen);
+        printf("%s attestation chip:   ", label);
+        print_hex("", attst_data.data[0].chipId, attst_data.data[0].chipIdLen);
+        printf("%s attestation sig:    ", label);
+        print_hex("", attst_data.data[0].signature, attst_data.data[0].signatureLen);
+    }
+
+cleanup:
+    if (attestation_key_initialized) {
+        sss_key_object_free(&attestation_key);
+    }
+    if (target_key_initialized) {
+        sss_key_object_free(&target_key);
+    }
+    if (key_store_initialized) {
+        sss_key_store_context_free(&key_store);
+    }
+    return status;
+}
+
+static sss_status_t read_secure_key_objects_with_attestation(sss_session_t *session)
+{
+    sss_status_t status      = kStatus_SSS_Fail;
+    smStatus_t sm_status     = SM_NOT_OK;
+    uint8_t freshness[16]    = {0};
+    size_t freshness_len     = sizeof(freshness);
+
+    sm_status = Se05x_API_GetRandom(&((sss_se05x_session_t *)session)->s_ctx, sizeof(freshness), freshness, &freshness_len);
+    if ((sm_status != SM_OK) || (freshness_len != sizeof(freshness))) {
+        LOG_W("Unable to generate attestation freshness: 0x%04X", sm_status);
+        return kStatus_SSS_Fail;
+    }
+
+    status = read_key_object_with_attestation(
+        session, SE052F_ATTESTATION_KEY_ID, "PlatformSCP+AppletSCP(ECKey) attestation key", freshness, freshness_len);
+    if (status != kStatus_SSS_Success) {
+        return status;
+    }
+
+    status = read_key_object_with_attestation(
+        session, SE052F_SIGNING_KEY_ID, "PlatformSCP+AppletSCP(ECKey) signing key", freshness, freshness_len);
+    if (status == kStatus_SSS_Success) {
+        printf("Expected result: read-with-attestation succeeded for all secure key objects\n");
+    }
+
+    return status;
+}
+
 int main(int argc, const char *argv[])
 {
     ex_sss_boot_ctx_t boot_ctx;
@@ -395,12 +536,12 @@ int main(int argc, const char *argv[])
     uint8_t signing_digest[32] = {0};
     size_t signing_digest_len  = sizeof(signing_digest);
     sss_se05x_session_t *se05x_session = NULL;
-    int apdu_probe_ok        = 0;
     int runtime_auth_object_ok = 0;
     int secure_key_objects_ok = 0;
     int applet_scp_session_ok = 0;
     int applet_scp_probe_ok = 0;
     int applet_scp_sign_ok = 0;
+    int applet_scp_attested_read_ok = 0;
 
     memset(&boot_ctx, 0, sizeof(boot_ctx));
     memset(&applet_scp_session, 0, sizeof(applet_scp_session));
@@ -460,7 +601,6 @@ int main(int argc, const char *argv[])
     sm_status = Se05x_API_GetVersion(&se05x_session->s_ctx, version, &version_len);
     if (sm_status == SM_OK) {
         print_hex("SE05x applet version: ", version, version_len);
-        apdu_probe_ok = 1;
     }
     else {
         LOG_W("Se05x_API_GetVersion failed: 0x%04X", sm_status);
@@ -469,7 +609,6 @@ int main(int argc, const char *argv[])
     sm_status = Se05x_API_ReadState(&se05x_session->s_ctx, state, &state_len);
     if (sm_status == SM_OK) {
         print_hex("SE05x state:          ", state, state_len);
-        apdu_probe_ok = 1;
     }
     else {
         LOG_W("Se05x_API_ReadState failed: 0x%04X", sm_status);
@@ -478,7 +617,6 @@ int main(int argc, const char *argv[])
     sm_status = Se05x_API_GetRandom(&se05x_session->s_ctx, sizeof(random_data), random_data, &random_data_len);
     if (sm_status == SM_OK) {
         print_hex("SE05x random bytes:   ", random_data, random_data_len);
-        apdu_probe_ok = 1;
     }
     else {
         LOG_W("Se05x_API_GetRandom failed: 0x%04X", sm_status);
@@ -488,16 +626,29 @@ int main(int argc, const char *argv[])
         signing_digest_len = sizeof(signing_digest);
         sm_status = Se05x_API_GetRandom(&se05x_session->s_ctx, sizeof(signing_digest), signing_digest, &signing_digest_len);
         if ((sm_status == SM_OK) && (signing_digest_len == sizeof(signing_digest))) {
+            printf("Expected: PlatformSCP-only signing should fail because key 0x%08X requires auth object 0x%08X\n",
+                SE052F_SIGNING_KEY_ID,
+                SE052F_RUNTIME_AUTH_OBJ_ID);
             sss_status = sign_random_digest_with_existing_key(&boot_ctx.session, "PlatformSCP", signing_digest, signing_digest_len);
             if (sss_status != kStatus_SSS_Success) {
-                LOG_W("PlatformSCP signing probe failed; this is expected if the key policy requires auth object 0x%08X",
-                    SE052F_RUNTIME_AUTH_OBJ_ID);
+                printf("Expected result: PlatformSCP-only signing was denied by object policy\n");
+            }
+            else {
+                LOG_W("Unexpected result: PlatformSCP-only signing succeeded");
             }
 
+            printf("Expected: PlatformSCP+AppletSCP(ECKey) signing should succeed using auth object 0x%08X\n",
+                SE052F_RUNTIME_AUTH_OBJ_ID);
             sss_status = sign_random_digest_with_existing_key(
                 &applet_scp_session, "PlatformSCP+AppletSCP(ECKey)", signing_digest, signing_digest_len);
             if (sss_status == kStatus_SSS_Success) {
                 applet_scp_sign_ok = 1;
+                printf("Expected result: PlatformSCP+AppletSCP(ECKey) signing succeeded\n");
+            }
+
+            sss_status = read_secure_key_objects_with_attestation(&applet_scp_session);
+            if (sss_status == kStatus_SSS_Success) {
+                applet_scp_attested_read_ok = 1;
             }
         }
         else {
@@ -505,14 +656,8 @@ int main(int argc, const char *argv[])
         }
     }
 
-    if (apdu_probe_ok) {
-        printf("SE052F hello test passed; at least one non-destructive APDU succeeded\n");
-    }
-    else {
-        printf("SE052F session-open hello test passed; non-destructive APDU probes were rejected\n");
-    }
     ret = (runtime_auth_object_ok && secure_key_objects_ok && applet_scp_session_ok && applet_scp_probe_ok &&
-              applet_scp_sign_ok) ?
+              applet_scp_sign_ok && applet_scp_attested_read_ok) ?
               0 :
               1;
 
