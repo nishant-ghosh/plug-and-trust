@@ -48,6 +48,256 @@ static void print_hex(const char *label, const uint8_t *data, size_t data_len)
     printf("\n");
 }
 
+static uint16_t read_be16(const uint8_t *data)
+{
+    return (uint16_t)(((uint16_t)data[0] << 8) | data[1]);
+}
+
+static uint32_t read_be32(const uint8_t *data)
+{
+    return ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) | ((uint32_t)data[2] << 8) | data[3];
+}
+
+static const char *object_type_name(uint8_t object_type)
+{
+    switch (object_type) {
+    case kSE05x_SecObjTyp_EC_KEY_PAIR_NIST_P256:
+        return "EC key pair, NIST P-256";
+    case kSE05x_SecObjTyp_EC_PUB_KEY_NIST_P256:
+        return "EC public key, NIST P-256";
+    default:
+        return "unrecognized/other";
+    }
+}
+
+static const char *auth_indicator_name(uint8_t auth_indicator)
+{
+    switch (auth_indicator) {
+    case kSE05x_SetIndicator_NOT_SET:
+        return "not an authentication object";
+    case kSE05x_SetIndicator_SET:
+        return "authentication object";
+    default:
+        return "unrecognized/other";
+    }
+}
+
+static const char *origin_name(uint8_t origin)
+{
+    switch (origin) {
+    case kSE05x_Origin_EXTERNAL:
+        return "externally set";
+    case kSE05x_Origin_INTERNAL:
+        return "internally generated";
+    case kSE05x_Origin_PROVISIONED:
+        return "NXP provisioned";
+    default:
+        return "unrecognized/other";
+    }
+}
+
+static int read_der_length(const uint8_t *data, size_t data_len, size_t *offset, size_t *der_len)
+{
+    uint8_t first_len = 0;
+
+    if (*offset >= data_len) {
+        return 0;
+    }
+
+    first_len = data[(*offset)++];
+    if ((first_len & 0x80u) == 0) {
+        *der_len = first_len;
+        return 1;
+    }
+
+    if (first_len == 0x81u) {
+        if (*offset >= data_len) {
+            return 0;
+        }
+        *der_len = data[(*offset)++];
+        return 1;
+    }
+
+    if (first_len == 0x82u) {
+        if ((*offset + 1) >= data_len) {
+            return 0;
+        }
+        *der_len = read_be16(&data[*offset]);
+        *offset += 2;
+        return 1;
+    }
+
+    return 0;
+}
+
+static int read_der_tlv(const uint8_t *data, size_t data_len, size_t *offset, uint8_t tag, size_t *value_offset, size_t *value_len)
+{
+    if ((*offset >= data_len) || (data[*offset] != tag)) {
+        return 0;
+    }
+
+    (*offset)++;
+    if (!read_der_length(data, data_len, offset, value_len)) {
+        return 0;
+    }
+    if ((*offset + *value_len) > data_len) {
+        return 0;
+    }
+
+    *value_offset = *offset;
+    *offset += *value_len;
+    return 1;
+}
+
+static void print_decoded_public_key(const char *label, const uint8_t *data, size_t data_len)
+{
+    static const uint8_t kOidEcPublicKey[] = {0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01};
+    static const uint8_t kOidPrime256v1[]  = {0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07};
+    size_t offset                          = 0;
+    size_t value_offset                    = 0;
+    size_t value_len                       = 0;
+    size_t outer_end                       = 0;
+    size_t alg_end                         = 0;
+    size_t oid_offset                      = 0;
+    size_t oid_len                         = 0;
+    size_t bit_string_offset               = 0;
+    size_t bit_string_len                  = 0;
+    const uint8_t *point                   = NULL;
+
+    if (!read_der_tlv(data, data_len, &offset, 0x30, &value_offset, &value_len)) {
+        printf("%s public key decode: unable to parse DER outer sequence\n", label);
+        return;
+    }
+    outer_end = value_offset + value_len;
+    offset    = value_offset;
+
+    if (!read_der_tlv(data, outer_end, &offset, 0x30, &value_offset, &value_len)) {
+        printf("%s public key decode: unable to parse AlgorithmIdentifier\n", label);
+        return;
+    }
+    alg_end = value_offset + value_len;
+
+    if (!read_der_tlv(data, alg_end, &value_offset, 0x06, &oid_offset, &oid_len) ||
+        (oid_len != sizeof(kOidEcPublicKey)) || (memcmp(&data[oid_offset], kOidEcPublicKey, oid_len) != 0)) {
+        printf("%s public key algorithm: unrecognized\n", label);
+        return;
+    }
+    printf("%s public key algorithm: id-ecPublicKey\n", label);
+
+    if (!read_der_tlv(data, alg_end, &value_offset, 0x06, &oid_offset, &oid_len) ||
+        (oid_len != sizeof(kOidPrime256v1)) || (memcmp(&data[oid_offset], kOidPrime256v1, oid_len) != 0)) {
+        printf("%s public key curve:     unrecognized\n", label);
+        return;
+    }
+    printf("%s public key curve:     prime256v1 / secp256r1 / NIST P-256\n", label);
+
+    if (!read_der_tlv(data, outer_end, &offset, 0x03, &bit_string_offset, &bit_string_len) || (bit_string_len != 66) ||
+        (data[bit_string_offset] != 0x00) || (data[bit_string_offset + 1] != 0x04)) {
+        printf("%s public key point:     unrecognized format\n", label);
+        return;
+    }
+
+    point = &data[bit_string_offset + 2];
+    printf("%s public key X:         ", label);
+    print_hex("", point, 32);
+    printf("%s public key Y:         ", label);
+    print_hex("", point + 32, 32);
+}
+
+static void print_policy_bits(const char *label, uint32_t policy_header)
+{
+    printf("%s policy bits:          0x%08X", label, policy_header);
+    if ((policy_header & POLICY_OBJ_ALLOW_SIGN) != 0u) {
+        printf(" ALLOW_SIGN");
+    }
+    if ((policy_header & POLICY_OBJ_ALLOW_VERIFY) != 0u) {
+        printf(" ALLOW_VERIFY");
+    }
+    if ((policy_header & POLICY_OBJ_ALLOW_KA) != 0u) {
+        printf(" ALLOW_KA");
+    }
+    if ((policy_header & POLICY_OBJ_ALLOW_READ) != 0u) {
+        printf(" ALLOW_READ");
+    }
+    if ((policy_header & POLICY_OBJ_ALLOW_DELETE) != 0u) {
+        printf(" ALLOW_DELETE");
+    }
+    if ((policy_header & POLICY_OBJ_REQUIRE_SM) != 0u) {
+        printf(" REQUIRE_SM");
+    }
+    if ((policy_header & POLICY_OBJ_ALLOW_ATTESTATION) != 0u) {
+        printf(" ALLOW_ATTESTATION");
+    }
+    printf("\n");
+}
+
+static void print_decoded_attestation_attributes(const char *label, const uint8_t *attribute, size_t attribute_len)
+{
+    size_t offset             = 0;
+    size_t policy_end         = 0;
+    uint32_t object_id        = 0;
+    uint8_t object_type       = 0;
+    uint8_t auth_indicator    = 0;
+    uint16_t tag_or_rfu       = 0;
+    uint32_t session_owner_id = 0;
+    uint16_t min_output_or_rfu = 0;
+    uint8_t origin            = 0;
+    uint32_t version          = 0;
+
+    if (attribute_len < 19) {
+        printf("%s attestation attributes decode: too short\n", label);
+        return;
+    }
+
+    object_id         = read_be32(&attribute[offset]);
+    offset += 4;
+    object_type       = attribute[offset++];
+    auth_indicator    = attribute[offset++];
+    tag_or_rfu        = read_be16(&attribute[offset]);
+    offset += 2;
+    session_owner_id  = read_be32(&attribute[offset]);
+    offset += 4;
+    min_output_or_rfu = read_be16(&attribute[offset]);
+    offset += 2;
+
+    policy_end = attribute_len - 5;
+    origin     = attribute[policy_end];
+    version    = read_be32(&attribute[policy_end + 1]);
+
+    printf("%s attr object id:       0x%08X\n", label, object_id);
+    printf("%s attr object type:     0x%02X (%s)\n", label, object_type, object_type_name(object_type));
+    printf("%s attr auth indicator:  0x%02X (%s)\n", label, auth_indicator, auth_indicator_name(auth_indicator));
+    printf("%s attr tag/RFU:         0x%04X\n", label, tag_or_rfu);
+    printf("%s attr session owner:   0x%08X\n", label, session_owner_id);
+    printf("%s attr min output/RFU:  0x%04X\n", label, min_output_or_rfu);
+
+    while (offset < policy_end) {
+        uint8_t policy_len = attribute[offset++];
+        size_t this_policy_end = offset + policy_len;
+        uint32_t policy_auth_id = 0;
+        uint32_t policy_header = 0;
+
+        if ((policy_len < 8) || (this_policy_end > policy_end)) {
+            printf("%s policy decode:        malformed policy field\n", label);
+            break;
+        }
+
+        policy_auth_id = read_be32(&attribute[offset]);
+        offset += 4;
+        printf("%s policy auth object:   0x%08X\n", label, policy_auth_id);
+
+        while ((offset + 4) <= this_policy_end) {
+            policy_header = read_be32(&attribute[offset]);
+            offset += 4;
+            print_policy_bits(label, policy_header);
+        }
+        offset = this_policy_end;
+    }
+
+    printf("%s attr origin:          0x%02X (%s)\n", label, origin, origin_name(origin));
+    printf("%s attr version:         0x%08X\n", label, version);
+}
+
 static void print_auth_mode(void)
 {
 #if SSS_HAVE_SE05X_AUTH_PLATFSCP03
@@ -466,9 +716,11 @@ static sss_status_t read_key_object_with_attestation(
     printf("%s attested read object: 0x%08X\n", label, object_id);
     printf("%s public object data:   ", label);
     print_hex("", object_data, object_data_len);
+    print_decoded_public_key(label, object_data, object_data_len);
     if (attst_data.valid_number > 0) {
         printf("%s attestation attr:   ", label);
         print_hex("", attst_data.data[0].attribute, attst_data.data[0].attributeLen);
+        print_decoded_attestation_attributes(label, attst_data.data[0].attribute, attst_data.data[0].attributeLen);
         printf("%s attestation chip:   ", label);
         print_hex("", attst_data.data[0].chipId, attst_data.data[0].chipIdLen);
         printf("%s attestation sig:    ", label);
